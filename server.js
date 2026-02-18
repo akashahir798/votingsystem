@@ -20,8 +20,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MongoDB Connection
-const MONGODB_URI = 'mongodb+srv://akashahir798_db_user:q9cLT4L8o8HjEy19@cluster0.pbkczae.mongodb.net/pollsystem?retryWrites=true&w=majority';
+// MongoDB Connection - use environment variable or fallback
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://akashahir798_db_user:q9cLT4L8o8HjEy19@cluster0.pbkczae.mongodb.net/pollsystem?retryWrites=true&w=majority';
+
+// Server Port
+const PORT = process.env.PORT || 3000;
 
 // Database Models
 const voteSchema = new mongoose.Schema({
@@ -535,7 +538,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   if (useInMemory) {
