@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VotePoll - Real-Time Polling System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* Additional inline styles for customization */
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="logo">
+        <i class="fas fa-poll"></i>
+        VotePoll
+      </div>
+      <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+        <i class="fas fa-bars"></i>
+      </button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#" data-page="home" class="active" onclick="showPage('home')">
+          <i class="fas fa-home"></i> Home
+        </a></li>
+        <li><a href="#" data-page="create" onclick="showPage('create')">
+          <i class="fas fa-plus-circle"></i> Create Poll
+        </a></li>
+        <li><a href="#" data-page="vote" onclick="showPage('vote')">
+          <i class="fas fa-vote-yea"></i> Vote
+        </a></li>
+        <li><a href="#" data-page="results" onclick="showPage('results')">
+          <i class="fas fa-chart-bar"></i> Results
+        </a></li>
+        <li><a href="#" data-page="dashboard" onclick="showPage('dashboard')">
+          <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Home Page -->
+    <div id="homePage" class="page active">
+      <div class="card" style="text-align: center; background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);">
+        <h1 class="card-title" style="font-size: 2.5rem; margin-bottom: 1rem;">
+          <i class="fas fa-poll" style="color: var(--primary);"></i> Welcome to VotePoll
+        </h1>
+        <p style="color: var(--text-secondary); font-size: 1.1rem; max-width: 600px; margin: 0 auto;">
+          Create polls, collect votes, and see real-time results. Simple, fast, and secure voting system.
+        </p>
+      </div>
+
+      <div class="stats-grid" id="homeStats">
+        <!-- Stats will be loaded dynamically -->
+      </div>
+
+      <h2 class="page-title"><i class="fas fa-fire"></i> Active Polls</h2>
+      <div class="poll-grid" id="activePolls">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Create Poll Page -->
+    <div id="createPage" class="page">
+      <div class="card">
+        <h2 class="card-title">Create New Poll</h2>
+        <form id="createPollForm">
+          <div class="form-group">
+            <label class="form-label">Poll Title *</label>
+            <input type="text" class="form-input" id="pollTitle" placeholder="Enter poll title" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description (Optional)</label>
+            <textarea class="form-textarea" id="pollDescription" placeholder="Describe your poll"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Poll Type *</label>
+            <select class="form-select" id="pollType" required>
+              <option value="single">Single Choice (One option)</option>
+              <option value="multi">Multiple Choice (Multiple options)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Voting Mode *</label>
+            <select class="form-select" id="votingMode" required>
+              <option value="named">Named Voting (Identity tracked)</option>
+              <option value="anonymous">Anonymous Voting (No identity)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Closing Time (Optional)</label>
+            <input type="datetime-local" class="form-input" id="closingTime">
+            <small style="color: var(--text-secondary);">Leave empty for no expiration</small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Options *</label>
+            <div class="poll-options" id="optionsContainer">
+              <div class="poll-option">
+                <input type="text" class="form-input" placeholder="Option 1" required>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeOption(this)" style="display:none;">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="poll-option">
+                <input type="text" class="form-input" placeholder="Option 2" required>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeOption(this)" style="display:none;">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="margin-top: 1rem;" onclick="addOption()">
+              <i class="fas fa-plus"></i> Add Option
+            </button>
+          </div>
+
+          <div id="createAlert"></div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-check"></i> Create Poll
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Vote Page -->
+    <div id="votePage" class="page">
+      <h2 class="page-title"><i class="fas fa-vote-yea"></i> Cast Your Vote</h2>
+      <div class="poll-grid" id="votePolls">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Results Page -->
+    <div id="resultsPage" class="page">
+      <h2 class="page-title"><i class="fas fa-chart-pie"></i> Poll Results</h2>
+      <div class="form-group">
+        <select class="form-select" id="resultsPollSelect" onchange="loadPollResults()">
+          <option value="">Select a poll</option>
+        </select>
+      </div>
+      <div id="resultsContent">
+        <div class="empty-state">
+          <i class="fas fa-chart-pie"></i>
+          <p>Select a poll to view results</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboardPage" class="page">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Organizer Dashboard</h2>
+        </div>
+        <div class="stats-grid" id="dashboardStats">
+          <!-- Stats will be loaded dynamically -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">All Polls</h3>
+        </div>
+        <div class="table-container">
+          <table id="dashboardTable">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Votes</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardTableBody">
+              <tr><td colspan="6"><div class="loading"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vote Modal -->
+  <div class="modal" id="voteModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="voteModalTitle" class="card-title">Cast Your Vote</h3>
+        <button class="modal-close" onclick="closeVoteModal()">&times;</button>
+      </div>
+      <div id="voteModalBody">
+        <!-- Poll details will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="modal" id="exportModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="card-title">Export Poll Results</h3>
+        <button class="modal-close" onclick="closeExportModal()">&times;</button>
+      </div>
+      <div>
+        <p style="margin-bottom: 1rem;">Choose export format:</p>
+        <button class="btn btn-primary" onclick="exportCSV()" style="width: 100%; margin-bottom: 0.5rem;">
+          <i class="fas fa-file-csv"></i> Export as CSV
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2024 VotePoll. All rights reserved to build with <i class="fas fa-heart" style="color: #e74c3c;"></i> for fun</p>
+  </footer>
+
+  <script>
+    // Global state
+    let currentUserId = localStorage.getItem('voterId') || generateUserId();
+    let socket;
+    let charts = {};
+
+    // Generate unique user ID
+    function generateUserId() {
+      const id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('voterId', id);
+      return id;
+    }
+
+    // Initialize Socket.io
+    function initSocket() {
+      socket = io();
+
+      socket.on('voteUpdate', (data) => {
+        console.log('Vote update received:', data);
+        if (document.getElementById('resultsPage').classList.contains('active')) {
+          loadPollResults(data.pollId);
+        }
+      });
+    }
+
+    // Navigation
+    function showPage(pageName) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+      
+      document.getElementById(pageName + 'Page').classList.add('active');
+      document.querySelector(`[data-page="${pageName}"]`)?.classList.add('active');
+
+      // Load data based on page
+      switch(pageName) {
+        case 'home':
+          loadHomeData();
+          break;
+        case 'vote':
+          loadVotePolls();
+          break;
+        case 'results':
+          loadResultsSelect();
+          break;
+        case 'dashboard':
+          loadDashboard();
+          break;
+      }
+    }
+
+    function toggleMobileMenu() {
+      document.getElementById('navLinks').classList.toggle('active');
+    }
+
+    // Home Page
+    async function loadHomeData() {
+      try {
+        const response = await fetch('/api/polls');
+        const polls = await response.json();
+
+        // Update stats
+        document.getElementById('homeStats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${polls.length}</div>
+            <div class="stat-label">Active Polls</div>
+          </div>
+        `;
+
+        // Render polls
+        const pollsContainer = document.getElementById('activePolls');
+        if (polls.length === 0) {
+          pollsContainer.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-poll"></i>
+              <p>No active polls yet. Create one!</p>
+            </div>
+          `;
+        } else {
+          pollsContainer.innerHTML = polls.map(poll => `
+            <div class="poll-card">
+              <div class="poll-card-header">
+                <h3 class="poll-card-title">${poll.title}</h3>
+                <div>
+                  ${poll.isAnonymous ? '<span class="badge badge-anonymous">Anonymous</span>' : ''}
+                  <span class="badge badge-active">Active</span>
+                </div>
+              </div>
+              <p class="poll-card-desc">${poll.description || 'No description'}</p>
+              <div class="poll-card-meta">
+                <span><i class="fas fa-list"></i> ${poll.options.length} options</span>
+                <span><i class="fas fa-${poll.pollType === 'single' ? 'circle' : 'check-square'}"></i> ${poll.pollType === 'single' ? 'Single' : 'Multi'} choice</span>
+              </div>
+              <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="openVoteModal('${poll.id}')">
+                <i class="fas fa-vote-yea"></i> Vote Now
+              </button>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        console.error('Error loading home data:', error);
+      }
+    }
+
+    // Create Poll
+    function addOption() {
+      const container = document.getElementById('optionsContainer');
+      const optionCount = container.children.length + 1;
+      
+      const optionDiv = document.createElement('div');
+      optionDiv.className = 'poll-option';
+      optionDiv.innerHTML = `
+        <input type="text" class="form-input" placeholder="Option ${optionCount}" required>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeOption(this)">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      container.appendChild(optionDiv);
+      
+      updateRemoveButtons();
+    }
+
+    function removeOption(btn) {
+      const container = document.getElementById('optionsContainer');
+      if (container.children.length > 2) {
+        btn.parentElement.remove();
+        updateOptionPlaceholders();
+        updateRemoveButtons();
+      }
+    }
+
+    function updateOptionPlaceholders() {
+      const options = document.querySelectorAll('#optionsContainer .form-input');
+      options.forEach((input, index) => {
+        input.placeholder = `Option ${index + 1}`;
+      });
+    }
+
+    function updateRemoveButtons() {
+      const container = document.getElementById('optionsContainer');
+      const buttons = container.querySelectorAll('.btn-danger');
+      buttons.forEach(btn => {
+        btn.style.display = container.children.length > 2 ? 'block' : 'none';
+      });
+    }
+
+    document.getElementById('createPollForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const options = [];
+      document.querySelectorAll('#optionsContainer .form-input').forEach(input => {
+        if (input.value.trim()) {
+          options.push(input.value.trim());
+        }
+      });
+
+      if (options.length < 2) {
+        showAlert('createAlert', 'Please add at least 2 options', 'error');
+        return;
+      }
+
+      const pollData = {
+        title: document.getElementById('pollTitle').value,
+        description: document.getElementById('pollDescription').value,
+        options: options,
+        pollType: document.getElementById('pollType').value,
+        isAnonymous: document.getElementById('votingMode').value === 'anonymous',
+        closingTime: document.getElementById('closingTime').value || null,
+        createdBy: currentUserId
+      };
+
+      try {
+        const response = await fetch('/api/polls', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pollData)
+        });
+
+        if (response.ok) {
+          showAlert('createAlert', 'Poll created successfully!', 'success');
+          document.getElementById('createPollForm').reset();
+          // Reset to 2 options
+          document.getElementById('optionsContainer').innerHTML = `
+            <div class="poll-option">
+              <input type="text" class="form-input" placeholder="Option 1" required>
+              <button type="button" class="btn btn-danger btn-sm" onclick="removeOption(this)" style="display:none;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div class="poll-option">
+              <input type="text" class="form-input" placeholder="Option 2" required>
+              <button type="button" class="btn btn-danger btn-sm" onclick="removeOption(this)" style="display:none;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          `;
+          loadHomeData();
+        } else {
+          const error = await response.json();
+          showAlert('createAlert', error.error || 'Failed to create poll', 'error');
+        }
+      } catch (error) {
+        showAlert('createAlert', 'An error occurred', 'error');
+      }
+    });
+
+    function showAlert(elementId, message, type) {
+      const alertDiv = document.getElementById(elementId);
+      alertDiv.innerHTML = `
+        <div class="alert alert-${type}">
+          <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+          ${message}
+        </div>
+      `;
+      setTimeout(() => {
+        alertDiv.innerHTML = '';
+      }, 5000);
+    }
+
+    // Vote Page
+    async function loadVotePolls() {
+      try {
+        const response = await fetch('/api/polls');
+        const polls = await response.json();
+
+        const container = document.getElementById('votePolls');
+        
+        if (polls.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-poll"></i>
+              <p>No polls available for voting</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = polls.map(poll => `
+          <div class="poll-card">
+            <div class="poll-card-header">
+              <h3 class="poll-card-title">${poll.title}</h3>
+              <div>
+                ${poll.isAnonymous ? '<span class="badge badge-anonymous">Anonymous</span>' : ''}
+                ${poll.isActive ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-closed">Closed</span>'}
+              </div>
+            </div>
+            <p class="poll-card-desc">${poll.description || 'No description'}</p>
+            <div class="poll-card-meta">
+              <span><i class="fas fa-list"></i> ${poll.options.length} options</span>
+              <span><i class="fas fa-${poll.pollType === 'single' ? 'circle' : 'check-square'}"></i> ${poll.pollType === 'single' ? 'Single' : 'Multi'} choice</span>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="openVoteModal('${poll.id}')" ${!poll.isActive ? 'disabled' : ''}>
+              <i class="fas fa-vote-yea"></i> ${poll.isActive ? 'Vote Now' : 'Poll Closed'}
+            </button>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading vote polls:', error);
+      }
+    }
+
+    // Vote Modal
+    async function openVoteModal(pollId) {
+      try {
+        const response = await fetch(`/api/polls/${pollId}`);
+        const poll = await response.json();
+
+        if (!poll) {
+          alert('Poll not found');
+          return;
+        }
+
+        // Check if already voted
+        const checkResponse = await fetch(`/api/vote/check/${pollId}/${currentUserId}`);
+        const { hasVoted } = await checkResponse.json();
+
+        document.getElementById('voteModalTitle').textContent = poll.title;
+        
+        let html = `
+          <p style="color: var(--text-secondary); margin-bottom: 1rem;">${poll.description || ''}</p>
+        `;
+
+        if (!poll.isActive) {
+          html += `
+            <div class="alert alert-warning">
+              <i class="fas fa-exclamation-triangle"></i>
+              This poll is closed and no longer accepting votes.
+            </div>
+          `;
+        } else if (hasVoted) {
+          html += `
+            <div class="alert alert-warning">
+              <i class="fas fa-check-circle"></i>
+              You have already voted in this poll.
+            </div>
+          `;
+        } else {
+          html += `
+            <form id="voteForm">
+              <input type="hidden" id="votePollId" value="${poll.id}">
+              ${!poll.isAnonymous ? `
+                <div class="form-group">
+                  <label class="form-label">Your Name</label>
+                  <input type="text" class="form-input" id="voterName" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Your Email</label>
+                  <input type="email" class="form-input" id="voterEmail">
+                </div>
+              ` : ''}
+              <div class="form-group">
+                <label class="form-label">Select your choice${poll.pollType === 'multi' ? 's' : ''}:</label>
+                <div class="poll-options">
+                  ${poll.options.map((option, index) => `
+                    <label class="poll-option">
+                      <input type="${poll.pollType === 'single' ? 'radio' : 'checkbox'}" 
+                             name="voteOption" 
+                             value="${option}"
+                             ${poll.pollType === 'single' && index === 0 ? 'checked' : ''}>
+                      <span class="poll-option-text">${option}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+              <div id="voteAlert"></div>
+              <button type="submit" class="btn btn-success" style="width: 100%;">
+                <i class="fas fa-check"></i> Submit Vote
+              </button>
+            </form>
+          `;
+        }
+
+        document.getElementById('voteModalBody').innerHTML = html;
+        
+        // Show results after voting
+        if (hasVoted || !poll.isActive) {
+          loadVoteResultsInModal(poll.id);
+        }
+
+        document.getElementById('voteModal').classList.add('active');
+
+        // Add form submit handler
+        const voteForm = document.getElementById('voteForm');
+        if (voteForm) {
+          voteForm.addEventListener('submit', handleVoteSubmit);
+        }
+      } catch (error) {
+        console.error('Error opening vote modal:', error);
+      }
+    }
+
+    async function loadVoteResultsInModal(pollId) {
+      try {
+        const response = await fetch(`/api/results/${pollId}`);
+        const results = await response.json();
+
+        if (results) {
+          const resultsHtml = `
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+              <h4 style="margin-bottom: 1rem;">Current Results</h4>
+              <div class="result-bar">
+                ${results.results.map(r => `
+                  <div class="result-label">
+                    <span>${r.option}</span>
+                    <span>${r.count} votes (${r.percentage}%)</span>
+                  </div>
+                  <div class="result-progress">
+                    <div class="result-progress-fill" style="width: ${r.percentage}%"></div>
+                  </div>
+                `).join('')}
+              </div>
+              <p class="vote-count" style="text-align: center;">Total votes: ${results.totalVotes}</p>
+            </div>
+          `;
+          document.getElementById('voteModalBody').innerHTML += resultsHtml;
+        }
+      } catch (error) {
+        console.error('Error loading results:', error);
+      }
+    }
+
+    async function handleVoteSubmit(e) {
+      e.preventDefault();
+
+      const pollId = document.getElementById('votePollId').value;
+      const voterName = document.getElementById('voterName')?.value;
+      const voterEmail = document.getElementById('voterEmail')?.value;
+      
+      const selectedOptions = Array.from(document.querySelectorAll('input[name="voteOption"]:checked'))
+        .map(input => input.value);
+
+      if (selectedOptions.length === 0) {
+        showAlert('voteAlert', 'Please select at least one option', 'error');
+        return;
+      }
+
+      const voteData = {
+        pollId: pollId,
+        voterId: currentUserId,
+        voterName: voterName,
+        voterEmail: voterEmail,
+        selectedOptions: selectedOptions,
+        ipAddress: ''
+      };
+
+      try {
+        const response = await fetch('/api/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(voteData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          showAlert('voteAlert', 'Vote recorded successfully!', 'success');
+          // Reload results
+          setTimeout(() => {
+            openVoteModal(pollId);
+          }, 1500);
+        } else {
+          showAlert('voteAlert', result.error || 'Failed to record vote', 'error');
+        }
+      } catch (error) {
+        showAlert('voteAlert', 'An error occurred', 'error');
+      }
+    }
+
+    function closeVoteModal() {
+      document.getElementById('voteModal').classList.remove('active');
+    }
+
+    // Results Page
+    async function loadResultsSelect() {
+      try {
+        const response = await fetch('/api/polls');
+        const polls = await response.json();
+
+        const select = document.getElementById('resultsPollSelect');
+        select.innerHTML = '<option value="">Select a poll</option>' + 
+          polls.map(poll => `<option value="${poll.id}">${poll.title}</option>`).join('');
+      } catch (error) {
+        console.error('Error loading results select:', error);
+      }
+    }
+
+    async function loadPollResults(pollId) {
+      const selectedPollId = pollId || document.getElementById('resultsPollSelect').value;
+      
+      if (!selectedPollId) {
+        document.getElementById('resultsContent').innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-chart-pie"></i>
+            <p>Select a poll to view results</p>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/results/${selectedPollId}`);
+        const results = await response.json();
+
+        if (!results) {
+          document.getElementById('resultsContent').innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-exclamation-circle"></i>
+              <p>Poll not found</p>
+            </div>
+          `;
+          return;
+        }
+
+        const container = document.getElementById('resultsContent');
+        container.innerHTML = `
+          <div class="results-container">
+            <div class="card">
+              <h3 class="card-title">Vote Distribution</h3>
+              <div style="margin-top: 1rem;">
+                ${results.results.map(r => `
+                  <div class="result-bar">
+                    <div class="result-label">
+                      <span>${r.option}</span>
+                      <span>${r.count} votes (${r.percentage}%)</span>
+                    </div>
+                    <div class="result-progress">
+                      <div class="result-progress-fill" style="width: ${r.percentage}%"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+              <p class="vote-count" style="text-align: center; margin-top: 1rem;">
+                <i class="fas fa-users"></i> Total Votes: ${results.totalVotes}
+              </p>
+            </div>
+            <div class="card">
+              <h3 class="card-title">Chart View</h3>
+              <div style="margin-top: 1rem;">
+                <canvas id="resultsChart"></canvas>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Create Chart
+        const ctx = document.getElementById('resultsChart').getContext('2d');
+        
+        // Destroy existing chart if any
+        if (charts['results']) {
+          charts['results'].destroy();
+        }
+
+        charts['results'] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: results.results.map(r => r.option),
+            datasets: [{
+              label: 'Votes',
+              data: results.results.map(r => r.count),
+              backgroundColor: [
+                'rgba(99, 102, 241, 0.8)',
+                'rgba(34, 197, 94, 0.8)',
+                'rgba(245, 158, 11, 0.8)',
+                'rgba(239, 68, 68, 0.8)',
+                'rgba(147, 51, 234, 0.8)',
+                'rgba(59, 130, 246, 0.8)'
+              ],
+              borderColor: [
+                'rgb(99, 102, 241)',
+                'rgb(34, 197, 94)',
+                'rgb(245, 158, 11)',
+                'rgb(239, 68, 68)',
+                'rgb(147, 51, 234)',
+                'rgb(59, 130, 246)'
+              ],
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                display: false
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  stepSize: 1
+                }
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error loading results:', error);
+      }
+    }
+
+    // Dashboard
+    async function loadDashboard() {
+      try {
+        const response = await fetch('/api/dashboard/polls');
+        const polls = await response.json();
+
+        // Update stats
+        const activePolls = polls.filter(p => p.isActive).length;
+        const totalVotes = polls.reduce((sum, p) => sum + p.totalVotes, 0);
+        const closedPolls = polls.filter(p => !p.isActive).length;
+
+        document.getElementById('dashboardStats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${polls.length}</div>
+            <div class="stat-label">Total Polls</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${activePolls}</div>
+            <div class="stat-label">Active Polls</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${closedPolls}</div>
+            <div class="stat-label">Closed Polls</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${totalVotes}</div>
+            <div class="stat-label">Total Votes</div>
+          </div>
+        `;
+
+        // Render table
+        const tbody = document.getElementById('dashboardTableBody');
+        
+        if (polls.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <i class="fas fa-folder-open"></i>
+                  <p>No polls created yet</p>
+                </div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = polls.map(poll => `
+          <tr>
+            <td>
+              <strong>${poll.title}</strong>
+              ${poll.description ? `<br><small style="color: var(--text-secondary);">${poll.description.substring(0, 50)}${poll.description.length > 50 ? '...' : ''}</small>` : ''}
+            </td>
+            <td>
+              <span class="badge" style="background: var(--background); color: var(--text-secondary);">
+                ${poll.pollType === 'single' ? 'Single' : 'Multi'}
+              </span>
+              ${poll.isAnonymous ? '<br><span class="badge badge-anonymous">Anonymous</span>' : ''}
+            </td>
+            <td>${poll.totalVotes}</td>
+            <td>
+              ${poll.isActive 
+                ? `<span class="badge badge-active">Active</span>`
+                : `<span class="badge badge-closed">Closed</span>`
+              }
+            </td>
+            <td>${new Date(poll.createdAt).toLocaleDateString()}</td>
+            <td>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-sm btn-outline" onclick="viewPollResults('${poll.id}')" title="View Results">
+                  <i class="fas fa-chart-bar"></i>
+                </button>
+                ${poll.isActive ? `
+                  <button class="btn btn-sm btn-danger" onclick="closePoll('${poll.id}')" title="Close Poll">
+                    <i class="fas fa-lock"></i>
+                  </button>
+                ` : ''}
+                <button class="btn btn-sm btn-primary" onclick="openExport('${poll.id}')" title="Export">
+                  <i class="fas fa-download"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deletePoll('${poll.id}')" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      }
+    }
+
+    async function viewPollResults(pollId) {
+      document.getElementById('resultsPollSelect').value = pollId;
+      showPage('results');
+      loadPollResults(pollId);
+    }
+
+    async function closePoll(pollId) {
+      if (!confirm('Are you sure you want to close this poll?')) return;
+
+      try {
+        const response = await fetch(`/api/polls/${pollId}/close`, { method: 'POST' });
+        if (response.ok) {
+          alert('Poll closed successfully');
+          loadDashboard();
+        } else {
+          alert('Failed to close poll');
+        }
+      } catch (error) {
+        console.error('Error closing poll:', error);
+      }
+    }
+
+    async function deletePoll(pollId) {
+      if (!confirm('Are you sure you want to delete this poll? All votes will be lost.')) return;
+
+      try {
+        const response = await fetch(`/api/polls/${pollId}`, { method: 'DELETE' });
+        if (response.ok) {
+          alert('Poll deleted successfully');
+          loadDashboard();
+        } else {
+          alert('Failed to delete poll');
+        }
+      } catch (error) {
+        console.error('Error deleting poll:', error);
+      }
+    }
+
+    function openExport(pollId) {
+      window.currentExportPollId = pollId;
+      document.getElementById('exportModal').classList.add('active');
+    }
+
+    function closeExportModal() {
+      document.getElementById('exportModal').classList.remove('active');
+    }
+
+    function exportCSV() {
+      const pollId = window.currentExportPollId;
+      if (pollId) {
+        window.open(`/api/export/csv/${pollId}`, '_blank');
+        closeExportModal();
+      }
+    }
+
+    // Close modals on outside click
+    document.querySelectorAll('.modal').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.classList.remove('active');
+        }
+      });
+    });
+
+    // Initialize app
+    document.addEventListener('DOMContentLoaded', () => {
+      initSocket();
+      loadHomeData();
+    });
+  </script>
+</body>
+</html>
